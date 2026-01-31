@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>STOP TIMER</title>
-  <meta name="description" content="Мини-игра на точность: останови таймер ровно на цели. Фон — твоя гифка/видео." />
+  <title>STOP MODE</title>
+  <meta name="description" content="Мини-игра: STOP-режим. Попади в окно точности, набирай комбо, ловушки, слоумо. Фон — твоя гифка." />
   <style>
     :root{
       --bg:#05060d;
@@ -86,7 +86,7 @@
       background:
         radial-gradient(900px 600px at 30% 15%, rgba(67,243,255,0.10), transparent 60%),
         radial-gradient(900px 700px at 80% 30%, rgba(255,58,118,0.08), transparent 62%),
-        linear-gradient(180deg, rgba(0,0,0,0.20), rgba(0,0,0,0.60));
+        linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.62));
       pointer-events:none;
     }
 
@@ -134,6 +134,7 @@
       width:0%;
       background: linear-gradient(90deg, rgba(67,243,255,0.85), rgba(255,58,118,0.75));
     }
+    .bar.hot{border-color: rgba(184,255,74,0.35);}
 
     .bottomrow{
       display:flex;
@@ -161,6 +162,7 @@
     button:hover{border-color: rgba(255,255,255,0.28); background: rgba(0,0,0,0.44);}
     button:active{transform: translateY(1px);}
     button.primary{border-color: rgba(67,243,255,0.35); background: linear-gradient(180deg, rgba(67,243,255,0.18), rgba(0,0,0,0.26));}
+    button:disabled{opacity:0.45; cursor:not-allowed;}
 
     .hint{font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.70);}
     .hint .kbd{padding:2px 6px;border:1px solid rgba(255,255,255,0.18);border-radius:8px;background:rgba(0,0,0,0.25)}
@@ -174,6 +176,16 @@
 
     .pad{padding:16px;}
 
+    .flash{
+      position:absolute; inset:0;
+      pointer-events:none;
+      opacity:0;
+      transition: opacity 0.12s ease;
+    }
+    .flash.on{opacity:1;}
+    .flash.trap{background: radial-gradient(700px 500px at 50% 45%, rgba(255,58,118,0.18), transparent 65%);}
+    .flash.slow{background: radial-gradient(700px 500px at 50% 45%, rgba(67,243,255,0.16), transparent 65%);}
+
     @media (max-width: 700px){
       .big{font-size: 44px;}
       .stage{min-height: 360px;}
@@ -185,12 +197,15 @@
   <div class="wrap">
     <header>
       <div class="brand">
-        <div class="title">stop-timer</div>
-        <div class="subtitle">Останови таймер ровно на цели. Чем ближе — тем больше очков.</div>
+        <div class="title">stop-mode</div>
+        <div class="subtitle">Окно точности сужается. Иногда есть ловушка. Есть слоумо. Никаких оправданий.</div>
       </div>
       <div class="hud">
         <div class="chip">score: <span id="score">0</span></div>
         <div class="chip">best: <span id="best">0</span></div>
+        <div class="chip">streak: <span id="streak">0</span></div>
+        <div class="chip">×<span id="mult">1.0</span></div>
+        <div class="chip">slow: <span id="slow">0</span></div>
         <div class="chip" id="status">ready</div>
       </div>
     </header>
@@ -199,12 +214,13 @@
       <div class="stage">
         <video class="bgvid" id="bg" src="stop.mp4" autoplay muted loop playsinline></video>
         <div class="veil"></div>
+        <div class="flash" id="flash"></div>
 
         <div class="ui">
           <div class="toprow">
             <div>
               <div class="big" id="time">0.00</div>
-              <div class="bar" aria-hidden="true"><div id="barFill"></div></div>
+              <div class="bar" aria-hidden="true" id="bar"><div id="barFill"></div></div>
             </div>
             <div class="target" id="target">target: 5.00s</div>
           </div>
@@ -214,161 +230,99 @@
               <button class="primary" id="btnGo">GO</button>
               <button id="btnStop" disabled>STOP</button>
               <button id="btnNext">NEXT</button>
+              <button id="btnSlow" disabled>SLOW</button>
             </div>
             <div class="hint">
-              <span class="kbd">Space</span> — GO/STOP, <span class="kbd">N</span> — next
+              <span class="kbd">Space</span> — GO/STOP, <span class="kbd">N</span> — next, <span class="kbd">Shift</span> — slow
             </div>
           </div>
         </div>
       </div>
 
       <div class="pad">
-        <div class="result" id="result">Нажми GO. Цель меняется каждый раунд.</div>
+        <div class="result" id="result">GO. Попади в окно. Ловушка обозначается в target строке.</div>
       </div>
     </section>
   </div>
 
-<script>
-(() => {
-  const timeEl = document.getElementById('time');
-  const targetEl = document.getElementById('target');
-  const resultEl = document.getElementById('result');
-  const statusEl = document.getElementById('status');
-  const barFill = document.getElementById('barFill');
+<script type="module">
+import { createGame } from './game.js';
 
-  const btnGo = document.getElementById('btnGo');
-  const btnStop = document.getElementById('btnStop');
-  const btnNext = document.getElementById('btnNext');
+const timeEl = document.getElementById('time');
+const targetEl = document.getElementById('target');
+const resultEl = document.getElementById('result');
+const statusEl = document.getElementById('status');
+const barFill = document.getElementById('barFill');
+const bar = document.getElementById('bar');
+const flash = document.getElementById('flash');
 
-  const scoreEl = document.getElementById('score');
-  const bestEl = document.getElementById('best');
+const btnGo = document.getElementById('btnGo');
+const btnStop = document.getElementById('btnStop');
+const btnNext = document.getElementById('btnNext');
+const btnSlow = document.getElementById('btnSlow');
 
-  const st = {
-    running:false,
-    t:0,
-    last:performance.now(),
-    target: 5.00,
-    score: 0,
-    best: Number(localStorage.getItem('stopTimerBest') || 0),
-    round: 0,
-  };
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const streakEl = document.getElementById('streak');
+const multEl = document.getElementById('mult');
+const slowEl = document.getElementById('slow');
 
-  bestEl.textContent = String(st.best);
+function doFlash(kind){
+  flash.className = `flash on ${kind}`;
+  setTimeout(() => { flash.className = 'flash'; }, 120);
+}
 
-  function fmt(x){
-    return x.toFixed(2);
-  }
+const game = createGame({
+  onUI: (u) => {
+    if (u.timeText != null) timeEl.textContent = u.timeText;
+    if (u.targetText != null){
+      const extra = u.trapText ? ` | ${u.trapText}` : '';
+      targetEl.textContent = u.targetText + extra;
+    }
+    if (u.result != null) resultEl.textContent = u.result;
+    if (u.status != null) statusEl.textContent = u.status;
 
-  function pickTarget(){
-    // 3.00..8.00 with 0.05 steps
-    const raw = 3 + Math.random()*5;
-    const step = 0.05;
-    st.target = Math.round(raw/step)*step;
-    targetEl.textContent = `target: ${fmt(st.target)}s`;
-  }
+    if (u.bar != null) barFill.style.width = `${(u.bar*100).toFixed(1)}%`;
+    if (u.hot != null) bar.classList.toggle('hot', !!u.hot);
 
-  function resetTimer(){
-    st.t = 0;
-    timeEl.textContent = fmt(st.t);
-    barFill.style.width = '0%';
-  }
+    if (u.canGo != null) btnGo.disabled = !u.canGo;
+    if (u.canStop != null) btnStop.disabled = !u.canStop;
 
-  function setRunning(v){
-    st.running = v;
-    statusEl.textContent = v ? 'running' : 'ready';
-    btnStop.disabled = !v;
-    btnGo.disabled = v;
-  }
-
-  function start(){
-    resetTimer();
-    setRunning(true);
-    resultEl.textContent = 'Поехали. Останови как можно ближе к цели.';
-  }
-
-  function scoreFor(delta){
-    // delta in seconds
-    // perfect: 1000, falls off smoothly
-    const d = Math.abs(delta);
-    const s = Math.max(0, 1000 * Math.exp(- (d*d) / (2 * 0.08 * 0.08)) ); // sigma=0.08
-    return Math.round(s);
-  }
-
-  function stop(){
-    if (!st.running) return;
-    setRunning(false);
-
-    const delta = st.t - st.target;
-    const pts = scoreFor(delta);
-    st.score += pts;
-    scoreEl.textContent = String(st.score);
-
-    if (st.score > st.best){
-      st.best = st.score;
-      localStorage.setItem('stopTimerBest', String(st.best));
-      bestEl.textContent = String(st.best);
+    if (u.score != null) scoreEl.textContent = String(u.score);
+    if (u.best != null) bestEl.textContent = String(u.best);
+    if (u.streak != null) streakEl.textContent = String(u.streak);
+    if (u.mult != null) multEl.textContent = Number(u.mult).toFixed(1);
+    if (u.slowMo != null){
+      slowEl.textContent = Number(u.slowMo).toFixed(1);
+      btnSlow.disabled = !(u.slowMo >= 1 && game.st.running);
     }
 
-    const sign = delta >= 0 ? '+' : '';
-    const absd = Math.abs(delta);
-    let grade = 'ok';
-    if (absd <= 0.03) grade = 'laser';
-    else if (absd <= 0.08) grade = 'tight';
-    else if (absd <= 0.18) grade = 'meh';
-    else grade = 'miss';
-
-    resultEl.textContent = `Остановил: ${fmt(st.t)}s (Δ ${sign}${fmt(delta)}s) → +${pts} pts (${grade}). Нажми NEXT.`;
+    if (u.flash === 'trap') doFlash('trap');
+    if (u.flash === 'slow') doFlash('slow');
   }
+});
 
-  function next(){
-    st.round += 1;
-    pickTarget();
-    resetTimer();
-    setRunning(false);
-    resultEl.textContent = 'Нажми GO. Цель обновлена.';
+btnGo.addEventListener('click', () => game.start());
+btnStop.addEventListener('click', () => game.stop());
+btnNext.addEventListener('click', () => game.next());
+btnSlow.addEventListener('click', () => game.useSlowMo());
+
+window.addEventListener('keydown', (e) => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (k === ' '){
+    e.preventDefault();
+    if (game.st.running) game.stop();
+    else game.start();
   }
+  if (k === 'n') game.next();
+  if (k === 'shift') game.useSlowMo();
+}, {passive:false});
 
-  btnGo.addEventListener('click', start);
-  btnStop.addEventListener('click', stop);
-  btnNext.addEventListener('click', next);
-
-  window.addEventListener('keydown', (e) => {
-    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    if (k === ' '){
-      e.preventDefault();
-      if (st.running) stop();
-      else start();
-    }
-    if (k === 'n') next();
-  }, {passive:false});
-
-  function loop(now){
-    const dt = Math.min(0.05, (now - st.last) / 1000);
-    st.last = now;
-
-    if (st.running){
-      st.t += dt;
-      timeEl.textContent = fmt(st.t);
-      // progress bar (wrap every 10s)
-      const p = ((st.t % 10) / 10) * 100;
-      barFill.style.width = `${p.toFixed(2)}%`;
-
-      // auto-stop if player AFK
-      if (st.t > 12.0){
-        stop();
-      }
-    }
-
-    requestAnimationFrame(loop);
-  }
-
-  // init
-  pickTarget();
-  scoreEl.textContent = String(st.score);
-  bestEl.textContent = String(st.best);
-  setRunning(false);
+function loop(now){
+  game.tick(now);
   requestAnimationFrame(loop);
-})();
+}
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>

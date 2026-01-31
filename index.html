@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STOP TIMER</title>
+  <meta name="description" content="Мини-игра на точность: останови таймер ровно на цели. Фон — твоя гифка/видео." />
+  <style>
+    :root{
+      --bg:#05060d;
+      --panel: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.14);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.62);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
+      --cyan:#43f3ff;
+      --pink:#ff3a76;
+      --shadow: rgba(0,0,0,0.55);
+    }
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color: var(--text);
+      background: radial-gradient(900px 700px at 20% 10%, rgba(67,243,255,0.10), transparent 60%), var(--bg);
+    }
+
+    .wrap{max-width:1000px;margin:0 auto;padding:18px 16px 24px;}
+
+    header{
+      display:flex;
+      justify-content:space-between;
+      align-items:baseline;
+      gap:16px;
+      padding:14px 16px;
+      border:1px solid var(--border);
+      background:var(--panel);
+      border-radius:16px;
+      box-shadow:0 20px 60px var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand{display:flex;flex-direction:column;gap:6px;}
+    .title{font-family:var(--mono);letter-spacing:0.6px;font-size:18px;}
+    .subtitle{font-size:13px;color:var(--muted);line-height:1.35;}
+    .hud{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;}
+    .chip{
+      font-family:var(--mono);
+      font-size:12px;
+      color:rgba(255,255,255,0.78);
+      padding:8px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,0.20);
+      white-space:nowrap;
+    }
+
+    .card{
+      margin-top:16px;
+      border:1px solid var(--border);
+      background:var(--panel);
+      border-radius:16px;
+      box-shadow:0 20px 60px var(--shadow);
+      backdrop-filter: blur(10px);
+      overflow:hidden;
+    }
+
+    .stage{
+      position:relative;
+      background: rgba(0,0,0,0.22);
+      aspect-ratio: 16/9;
+      min-height: 420px;
+    }
+
+    .bgvid{
+      position:absolute;inset:0;
+      width:100%;height:100%;
+      object-fit:cover;
+      filter: saturate(1.05) contrast(1.05) brightness(0.78);
+      transform: scale(1.03);
+    }
+
+    .veil{
+      position:absolute;inset:0;
+      background:
+        radial-gradient(900px 600px at 30% 15%, rgba(67,243,255,0.10), transparent 60%),
+        radial-gradient(900px 700px at 80% 30%, rgba(255,58,118,0.08), transparent 62%),
+        linear-gradient(180deg, rgba(0,0,0,0.20), rgba(0,0,0,0.60));
+      pointer-events:none;
+    }
+
+    .ui{
+      position:absolute;inset:0;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      padding:14px;
+      gap:12px;
+    }
+
+    .toprow{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start;}
+
+    .big{
+      font-family: var(--mono);
+      font-size: 56px;
+      line-height: 1;
+      letter-spacing: 0.5px;
+      text-shadow: 0 16px 40px rgba(0,0,0,0.55);
+      user-select:none;
+    }
+
+    .target{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.86);
+      border: 1px solid rgba(255,255,255,0.20);
+      background: rgba(0,0,0,0.30);
+      border-radius: 12px;
+      padding: 10px 12px;
+      width: fit-content;
+    }
+
+    .bar{
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.22);
+      overflow:hidden;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.15);
+    }
+    .bar > div{
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, rgba(67,243,255,0.85), rgba(255,58,118,0.75));
+    }
+
+    .bottomrow{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+
+    .btns{display:flex;gap:10px;flex-wrap:wrap;}
+    button{
+      appearance:none;
+      border:1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.34);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      transition: transform 0.06s ease, background 0.2s ease, border-color 0.2s ease;
+      user-select:none;
+    }
+    button:hover{border-color: rgba(255,255,255,0.28); background: rgba(0,0,0,0.44);}
+    button:active{transform: translateY(1px);}
+    button.primary{border-color: rgba(67,243,255,0.35); background: linear-gradient(180deg, rgba(67,243,255,0.18), rgba(0,0,0,0.26));}
+
+    .hint{font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,0.70);}
+    .hint .kbd{padding:2px 6px;border:1px solid rgba(255,255,255,0.18);border-radius:8px;background:rgba(0,0,0,0.25)}
+
+    .result{
+      margin-top:12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.78);
+    }
+
+    .pad{padding:16px;}
+
+    @media (max-width: 700px){
+      .big{font-size: 44px;}
+      .stage{min-height: 360px;}
+    }
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="title">stop-timer</div>
+        <div class="subtitle">Останови таймер ровно на цели. Чем ближе — тем больше очков.</div>
+      </div>
+      <div class="hud">
+        <div class="chip">score: <span id="score">0</span></div>
+        <div class="chip">best: <span id="best">0</span></div>
+        <div class="chip" id="status">ready</div>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="stage">
+        <video class="bgvid" id="bg" src="stop.mp4" autoplay muted loop playsinline></video>
+        <div class="veil"></div>
+
+        <div class="ui">
+          <div class="toprow">
+            <div>
+              <div class="big" id="time">0.00</div>
+              <div class="bar" aria-hidden="true"><div id="barFill"></div></div>
+            </div>
+            <div class="target" id="target">target: 5.00s</div>
+          </div>
+
+          <div class="bottomrow">
+            <div class="btns">
+              <button class="primary" id="btnGo">GO</button>
+              <button id="btnStop" disabled>STOP</button>
+              <button id="btnNext">NEXT</button>
+            </div>
+            <div class="hint">
+              <span class="kbd">Space</span> — GO/STOP, <span class="kbd">N</span> — next
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pad">
+        <div class="result" id="result">Нажми GO. Цель меняется каждый раунд.</div>
+      </div>
+    </section>
+  </div>
+
+<script>
+(() => {
+  const timeEl = document.getElementById('time');
+  const targetEl = document.getElementById('target');
+  const resultEl = document.getElementById('result');
+  const statusEl = document.getElementById('status');
+  const barFill = document.getElementById('barFill');
+
+  const btnGo = document.getElementById('btnGo');
+  const btnStop = document.getElementById('btnStop');
+  const btnNext = document.getElementById('btnNext');
+
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+
+  const st = {
+    running:false,
+    t:0,
+    last:performance.now(),
+    target: 5.00,
+    score: 0,
+    best: Number(localStorage.getItem('stopTimerBest') || 0),
+    round: 0,
+  };
+
+  bestEl.textContent = String(st.best);
+
+  function fmt(x){
+    return x.toFixed(2);
+  }
+
+  function pickTarget(){
+    // 3.00..8.00 with 0.05 steps
+    const raw = 3 + Math.random()*5;
+    const step = 0.05;
+    st.target = Math.round(raw/step)*step;
+    targetEl.textContent = `target: ${fmt(st.target)}s`;
+  }
+
+  function resetTimer(){
+    st.t = 0;
+    timeEl.textContent = fmt(st.t);
+    barFill.style.width = '0%';
+  }
+
+  function setRunning(v){
+    st.running = v;
+    statusEl.textContent = v ? 'running' : 'ready';
+    btnStop.disabled = !v;
+    btnGo.disabled = v;
+  }
+
+  function start(){
+    resetTimer();
+    setRunning(true);
+    resultEl.textContent = 'Поехали. Останови как можно ближе к цели.';
+  }
+
+  function scoreFor(delta){
+    // delta in seconds
+    // perfect: 1000, falls off smoothly
+    const d = Math.abs(delta);
+    const s = Math.max(0, 1000 * Math.exp(- (d*d) / (2 * 0.08 * 0.08)) ); // sigma=0.08
+    return Math.round(s);
+  }
+
+  function stop(){
+    if (!st.running) return;
+    setRunning(false);
+
+    const delta = st.t - st.target;
+    const pts = scoreFor(delta);
+    st.score += pts;
+    scoreEl.textContent = String(st.score);
+
+    if (st.score > st.best){
+      st.best = st.score;
+      localStorage.setItem('stopTimerBest', String(st.best));
+      bestEl.textContent = String(st.best);
+    }
+
+    const sign = delta >= 0 ? '+' : '';
+    const absd = Math.abs(delta);
+    let grade = 'ok';
+    if (absd <= 0.03) grade = 'laser';
+    else if (absd <= 0.08) grade = 'tight';
+    else if (absd <= 0.18) grade = 'meh';
+    else grade = 'miss';
+
+    resultEl.textContent = `Остановил: ${fmt(st.t)}s (Δ ${sign}${fmt(delta)}s) → +${pts} pts (${grade}). Нажми NEXT.`;
+  }
+
+  function next(){
+    st.round += 1;
+    pickTarget();
+    resetTimer();
+    setRunning(false);
+    resultEl.textContent = 'Нажми GO. Цель обновлена.';
+  }
+
+  btnGo.addEventListener('click', start);
+  btnStop.addEventListener('click', stop);
+  btnNext.addEventListener('click', next);
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k === ' '){
+      e.preventDefault();
+      if (st.running) stop();
+      else start();
+    }
+    if (k === 'n') next();
+  }, {passive:false});
+
+  function loop(now){
+    const dt = Math.min(0.05, (now - st.last) / 1000);
+    st.last = now;
+
+    if (st.running){
+      st.t += dt;
+      timeEl.textContent = fmt(st.t);
+      // progress bar (wrap every 10s)
+      const p = ((st.t % 10) / 10) * 100;
+      barFill.style.width = `${p.toFixed(2)}%`;
+
+      // auto-stop if player AFK
+      if (st.t > 12.0){
+        stop();
+      }
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  // init
+  pickTarget();
+  scoreEl.textContent = String(st.score);
+  bestEl.textContent = String(st.best);
+  setRunning(false);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
